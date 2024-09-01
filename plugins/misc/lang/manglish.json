@@ -22,7 +22,7 @@
             "REMOVE_DESC": "Removes plugin.",
             "NEED_PLUGIN": "Oru name thaa. like: .remove news",
             "PLUGIN_NOT_FOUND": "Angane oru plugin nee install akiyittilla",
-            "DELETED": "{} plugin remove cheyth. Venenkil restart cheytho"
+            "DELETED": "{} plugin remove cheyth. Venenkil reboot cheytho, atha nallath!"
         },
         "group": {
             "KICK_DESC": "Groupilnn alkare remove cheyyum.",
@@ -55,8 +55,8 @@
             "USER": "*Member:* ```{}```",
             "REMAINING": "*Sheshikunna warns:* ```{}```",
             "REASON": "*Kaaranam:* ```{}```",
-            "WARN_RESET": "_Mm, {} warnings und ini ninak_ _{}_ 😁",
-            "WARN_OVER": "_Ninte njan maximum warnings thannu, {} Kicked_"
+            "WARN_RESET": "_Mm, {} warnings und ini ninak {}_ 😁",
+            "WARN_OVER": "_Ninakk njan maximum warnings thannu, ini illa! {} kicked!_"
         },
         "media": {
             "TRIM_DESC": "Video or Audio cut cheyyum",

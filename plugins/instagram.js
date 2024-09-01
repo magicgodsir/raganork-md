@@ -11,6 +11,7 @@ const {
 } = require('@adiwajshing/baileys');
 const fs = require('fs');
 const got = require("got");
+const {pinSearch} = require("./misc/gis");
 const { fromBuffer } = require('file-type');
 const axios = require('axios');
 const setting = require('../config');
@@ -25,6 +26,7 @@ const {
     pin,
     story,
     tiktok,
+    igStalk,
     fb
 } = require('./misc/misc');
 const Config = require('../config');
@@ -36,6 +38,11 @@ var fail = "*_Download failed! Check your link and try again_*";
 var need_acc_s = "_Need an instagram username or link!_";
 let sourav = setting.MODE == 'public' ? false : true
 let hnd = setting.HANDLERS !== 'false'? setting.HANDLERS.split("")[0]:"";
+function BypassCertificateCheck(){
+if (process.env.NODE_TLS_REJECT_UNAUTHORIZED != 0) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
+} 
+} 
 Module({
     pattern: 'insta ?(.*)',
     fromMe: sourav,
@@ -43,6 +50,7 @@ Module({
     usage: 'insta link or reply to a link',
     use: 'download'
 }, (async (msg, query) => {
+    BypassCertificateCheck();
      var q = query[1] || msg.reply_message?.text
      if (q && (q.startsWith('l') || q.includes('youtu'))) return;
     if (!q) return await msg.sendReply("*Need instagram link*")
@@ -72,27 +80,16 @@ Module({
     usage: 'fb link or reply to a link',
     use: 'download'
 }, (async (msg, query) => {
+    BypassCertificateCheck();
      var q = !msg.reply_message.message ? query[1] : msg.reply_message.message
      let _q = !msg.reply_message.message ? query[1] : msg.reply_message.message
      if (/\bhttps?:\/\/\S+/gi.test(q)) q = q.match(/\bhttps?:\/\/\S+/gi)[0]
      if (!q) return await msg.sendReply("*Need Facebook link*")
-     if (!_q.includes("!")){
-const buttons = [
-  {buttonId: hnd+'fb '+q+' !hd', buttonText: {displayText: 'HD'}, type: 1},
-  {buttonId: hnd+'fb '+q+' !sd', buttonText: {displayText: 'SD'}, type: 1}
- ]
-const buttonMessage = {
-    text: "*Select video quality*",
-    footer: '',
-    buttons: buttons,
-    headerType: 1
-}
- await msg.client.sendMessage(msg.jid, buttonMessage,{quoted:msg.data})
-     }
-    if (_q.includes("!")){
      var res = await fb(q);
-     return await msg.sendReply({url: res[_q.split("!")[1]]},"video")
-     }
+     let sent_msg = await msg.sendReply('_*Hold on, downloading will take some time..*_')
+    const end = new Date().getTime()
+    await msg.sendReply({url: res.url},"video")
+    return await msg.edit('*_Download complete!_*',msg.jid,sent_msg.key)
         }));
 Module({
     pattern: 'ig ?(.*)',
@@ -100,25 +97,20 @@ Module({
     desc: 'Gets account info from instagram',
     usage: 'ig username',
     use: 'search'
-}, (async (msg, query) => {
-    if (query[1] === 'dl') return; 
-    if (query[1] === '') return await msg.client.sendMessage(msg.jid, {
-        text: need_acc
+}, (async (message, match) => {
+    BypassCertificateCheck();
+    if (!match[1]) return await message.sendReply("_Need instagram username!_")
+    if (match[1].startsWith("https") && match[1].includes("instagram")) {
+        const _regex = /instagram\.com\/([^/?]+)/i;
+        const _match = match[1].match(_regex);
+        match[1] = _match && _match[1];
+    }
+    try { var res = await igStalk(encodeURIComponent(match[1])) } catch { return await message.sendReply("_Server busy!_")}
+    await message.client.sendMessage(message.jid, {
+        image: {url: res.profile_pic},
+        caption: '_*Name:*_ ' + `${res.full_name}` + '\n_*Followers:*_ ' + `${res.followers}` + '\n_*Following:*_ ' +res.following+ '\n_*Bio:*_ ' + `${res.bio}` + '\n_*Private account:*_ ' + `${res.is_private?"Yes":"No"} ` + '\n_*Posts:*_ ' + `${res.posts}`
     }, {
-        quoted: msg.data
-    })
-    var res = await getStalk(query[1])
-    if (res === "false") return await msg.client.sendMessage(msg.jid, {
-        text: "*_Username invalid!_*"
-    }, {
-        quoted: msg.data
-    })
-    var buffer = await skbuffer(res.hd_profile_pic_url_info.url)
-    await msg.client.sendMessage(msg.jid, {
-        image: buffer,
-        caption: '_*Name:*_ ' + `${res.fullname}` + '\n _*Bio:*_ ' + `${res.biography}` + '\n _*Private account:*_ ' + `${res.is_private} ` + '\n _*Followers:*_ ' + `${res.followers}` + '\n _*Following:*_ ' + `${res.following}` + '\n _*Posts:*_ ' + `${res.post_count}` + '\n _*Verified:*_ ' + `${res.is_verified} ` + '\n _*IGTV videos:*_ ' + `${res.total_igtv_videos}`
-    }, {
-        quoted: msg.data
+        quoted: message.data
     });
 }));
 Module({
@@ -128,6 +120,7 @@ Module({
     usage: '.story username or link',
     use: 'download'
 }, (async (msg, query) => {
+    BypassCertificateCheck();
     var user = query[1] !== '' ? query[1] : msg.reply_message.text;
     if (user && user.includes("/reel/") || user.includes("/tv/") || user.includes("/p/")) return;
     if (!user) return await msg.sendReply(need_acc_s);
@@ -163,19 +156,43 @@ Module({
 }
 }));
 Module({
-    pattern: 'pin ?(.*)',
+    pattern: 'pinterest ?(.*)',
     fromMe: sourav,
     desc: 'Pinterest downloader',
-    usage: '.pin reply or link',
+    usage: '.pinterest reply or link',
     use: 'download'
 }, (async (msg, query) => {
     var user = query[1] !== '' ? query[1] : msg.reply_message.text;
     if (user === 'g') return;
-    if (!user) return await msg.sendReply("*Need url*");
-    if (/\bhttps?:\/\/\S+/gi.test(user)) user = user.match(/\bhttps?:\/\/\S+/gi)[0]
+    if (!user) return await msg.sendReply("*Need text or pinterest url*");
+    if (/\bhttps?:\/\/\S+/gi.test(user)) {
+        user = user.match(/\bhttps?:\/\/\S+/gi)[0]
     try { var res = await pin(user) } catch {return await msg.sendReply("*Server error*")}
     var quoted = msg.reply_message ? msg.quoted : msg.data
     await msg.client.sendMessage(msg.jid,{[res.endsWith('jpg')?'image':'video']:{url:res}},{quoted})
+    } else {
+        var count = parseInt(user.split(",")[1]) || 5, query = user.split(",")[0] || user;
+        const results = await pinSearch(query,count);
+        await msg.sendReply("_Downloading {} results for {} from pinterest_".format(results.length, query))
+        for (var i = 0; i < (results.length < count ? results.length : count); i++) {
+         try { var buff = await skbuffer(results[i]); } catch {
+		 count++
+	        var buff = false
+	 }
+         if (buff) await msg.send(buff, 'image');
+        }
+    }
+}));
+Module({
+    pattern: 'pin ?(.*)',
+    fromMe: sourav,
+    use: 'download'
+}, (async (msg, query) => {
+    var user = query[1] !== '' ? query[1] : msg.reply_message.text;
+    if (!user || user === 'g' || user.startsWith('terest')) return;
+    //if (/\bhttps?:\/\/\S+/gi.test(user)) {
+    await msg.sendReply("_Use .pinterest command for downloading content from this query!_")   
+    //}
 }));
 Module({
     pattern: 'tiktok ?(.*)',
@@ -187,17 +204,13 @@ Module({
     var link = query[1] !== '' ? query[1] : msg.reply_message.text;
     if (!link) return await msg.sendReply("_Need a tiktok url_");
     link = link.match(/\bhttps?:\/\/\S+/gi)[0]
-    const buttons = [
-        {buttonId: hnd+'upload '+'https://api.akuari.my.id/downloader/tiktoknowm?link='+link, buttonText: {displayText: 'No watermark'}, type: 1},
-        {buttonId: hnd+'upload '+'https://api.akuari.my.id/downloader/tiktokwithwm?link='+link, buttonText: {displayText: 'With watermark'}, type: 1}
-       ]
-      const buttonMessage = {
-          text: "_Select video type_",
-          footer: '',
-          buttons: buttons,
-          headerType: 1
-      }
-       await msg.client.sendMessage(msg.jid, buttonMessage,{quoted:msg.data})
+    let result;
+    try {
+        result = (await tiktok(link)).result
+        await msg.sendReply({url:result},'video')        
+    } catch (error) {
+        await msg.sendReply("```"+`Download failed\n\nResponse: ${result}`+"```")
+    }
       }));
     Module({
         on: 'button',
